@@ -1,0 +1,72 @@
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Node modules
+node_modules/
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+
+# Mobile development
+*.apk
+*.aab
+*.ipa
+*.xcarchive
+
+# Android specific
+*.iml
+.gradle/
+/local.properties
+/.idea/
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+
+# iOS specific
+Pods/
+*.xcworkspace
+xcuserdata/
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+*.xccheckout
+*.moved-aside
+DerivedData
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+# Environment files
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Build directories
+/build/
+/dist/
+/out/
+
+# Dependencies
+/vendor/
+
+# IDE specific
+.vscode/
+*.swp
+*.swo
+*~
