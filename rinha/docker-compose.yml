@@ -8,11 +8,11 @@ services:
       - DB_URL=postgres://admin:123@db:5432/rinha
     depends_on:
       - db
-    # deploy:
-    #   resources:
-    #     limits:
-    #       cpus: "0.55"
-    #       memory: "150MB"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.35"
+          memory: "45MB"
 
   api02:
     <<: *api
@@ -27,11 +27,11 @@ services:
       - api02
     ports:
       - "9999:9999"
-    # deploy:
-    #   resources:
-    #     limits:
-    #       cpus: "0.1"
-    #       memory: "20MB"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.25"
+          memory: "40MB"
 
   db:
     image: postgres:alpine
@@ -44,11 +44,11 @@ services:
       - ./sql/init.sql:/docker-entrypoint-initdb.d/init.sql
       - ./postgresql.conf:/docker-entrypoint-initdb.d/postgresql.config_file
     command: postgres -c config_file=/docker-entrypoint-initdb.d/postgresql.config_file
-    # deploy: 
-    #   resources:
-    #     limits:
-    #       cpus: "0.3"
-    #       memory: "230MB"
+    deploy: 
+      resources:
+        limits:
+          cpus: "0.55"
+          memory: "420MB"
 
 networks:
   default:

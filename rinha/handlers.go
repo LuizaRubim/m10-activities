@@ -82,8 +82,6 @@ func TransacoesHandler(w http.ResponseWriter, r *http.Request, ps httprouter.Par
 	var novoSaldo, novoLimite int
 	var statusCode int
 
-	// Trocamos os ponteiros por valores diretos, simplificando o código.
-	// A função SQL será ajustada para nunca retornar NULL em caso de sucesso.
 	err := db.QueryRow(ctx, "SELECT status_code, novo_saldo, novo_limite FROM realizar_transacao($1, $2, $3, $4)",
 		id, req.Valor, req.Tipo, req.Descricao).Scan(&statusCode, &novoSaldo, &novoLimite)
 
@@ -106,7 +104,7 @@ func TransacoesHandler(w http.ResponseWriter, r *http.Request, ps httprouter.Par
 
 	} else if statusCode == http.StatusUnprocessableEntity {
 		writeJSONError(w, http.StatusUnprocessableEntity, jsonErrorLimiteInsuficiente)
-	} else { // 404
+	} else {
 		writeJSONError(w, http.StatusNotFound, jsonErrorNotFound)
 	}
 }

@@ -46,16 +46,13 @@ func main() {
 
 	log.Println("Conectado ao DB!")
 
-	// Usando um roteador de alta performance
 	router := httprouter.New()
 	router.POST("/clientes/:id/transacoes", recoveryMiddleware(TransacoesHandler))
 	router.GET("/clientes/:id/extrato", recoveryMiddleware(ExtratoHandler))
 
-	// SOLUÇÃO PARA O 'EOF': Servidor HTTP com IdleTimeout
 	server := &http.Server{
 		Addr:    ":8080",
 		Handler: router,
-		// Previne o esgotamento de file descriptors fechando conexões ociosas.
 		IdleTimeout: time.Minute,
 	}
 
