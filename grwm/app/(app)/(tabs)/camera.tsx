@@ -1,131 +1,196 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { View, StyleSheet, Pressable, Image, Text } from 'react-native';
-import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
-import { router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { Button } from 'react-native-paper';
+import React, { useState } from 'react';
+import { View, StyleSheet, Image, Alert,
+  ScrollView, // Para permitir a rolagem
+  KeyboardAvoidingView, // Para evitar que o teclado cubra os inputs
+  Platform,
+ } from 'react-native';
+import { TextInput, Button, Text, SegmentedButtons, ActivityIndicator, Avatar } from 'react-native-paper';
+import * as ImagePicker from 'expo-image-picker';
+import { useRouter } from 'expo-router';
+import * as FileSystem from 'expo-file-system';
+import { decode } from 'base64-arraybuffer';
 
-export default function CameraScreen() {
-  const [permission, requestPermission] = useCameraPermissions();
-  const [type, setType] = useState<CameraType>('back');
-  const cameraRef = useRef<CameraView>(null);
-  const [uri, setUri] = useState<string | null>(null);
+import { supabase } from '../../../services/supabase';
 
-  useEffect(() => {
-    if (!permission) requestPermission();
-  }, [permission]);
+export default function AddPieceScreen() {
+  const router = useRouter();
 
-  const toggleFacing = () => {
-    setType(prev => (prev === 'back' ? 'front' : 'back'));
+  // Estados do Formulário (sem alteração)
+  const [imageUri, setImageUri] = useState<string | null>(null);
+  const [name, setName] = useState('');
+  const [brand, setBrand] = useState('');
+  const [description, setDescription] = useState('');
+  const [category, setCategory] = useState<'top' | 'bottom' | 'shoes' | 'accessories' | ''>('');
+  const [loading, setLoading] = useState(false);
+
+  // --- MUDANÇA 1: Duas funções separadas para pegar a imagem ---
+
+  // Função para selecionar uma imagem da galeria
+  const handlePickFromGallery = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permissão necessária', 'Precisamos de acesso à sua galeria.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      setImageUri(result.assets[0].uri);
+    }
   };
 
-  const handleTakePicture = async () => {
-    if (cameraRef.current) {
-      try {
-        const photo = await cameraRef.current.takePictureAsync({
-          base64: true,
-          quality: 0.5,
-        });
+  // Função para tirar uma foto com a câmera
+  const handleTakePhoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permissão necessária', 'Precisamos de acesso à sua câmera.');
+      return;
+    }
 
-        if (photo.base64) {
-          const base64Image = `data:image/jpeg;base64,${photo.base64}`;
-          setUri(base64Image);
-        }
-      } catch (error) {
-        console.error('Erro ao tirar foto:', error);
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled) {
+      setImageUri(result.assets[0].uri);
+    }
+  };
+
+  // Função de envio do formulário (sem alteração na lógica interna)
+  const handleAddPiece = async () => {
+    if (!imageUri || !name || !category) {
+      Alert.alert('Campos obrigatórios', 'Por favor, adicione uma imagem, nome e categoria.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (!user) throw new Error('Usuário não autenticado.');
+      console.log('Usuário para upload:', user);
+      
+      if (userError || !user) {
+        throw new Error(userError?.message || 'Usuário não autenticado. Faça login novamente.');
       }
-    }
-  };
+      const base64 = await FileSystem.readAsStringAsync(imageUri, { encoding: 'base64' });
+      const filePath = `${user.id}/${new Date().getTime()}.png`;
+      const contentType = 'image/png';
+      
+      const { error: uploadError } = await supabase.storage
+        .from('clothing-images')
+        .upload(filePath, decode(base64), { contentType });
+      if (uploadError) throw uploadError;
 
-  const handleUsePicture = () => {
-    if (uri) {
-      router.push({
-        pathname: '/new_clothes',
-        params: { photoUri: uri },
+      const { data: { publicUrl } } = supabase.storage.from('clothing-images').getPublicUrl(filePath);
+
+      const { error: insertError } = await supabase.from('clothes').insert({
+        user_id: user.id, name, brand, description, category, image_url: publicUrl,
       });
+      if (insertError) throw insertError;
+
+      await supabase.from('notifications').insert({
+        user_id: user.id, title: 'Nova peça adicionada!', message: `Sua peça "${name}" foi adicionada com sucesso.`,
+      });
+
+      setName('');
+      setBrand('');
+      setDescription('');
+      setCategory('');
+      setImageUri(null);
+
+      Alert.alert('Sucesso!', 'Sua nova peça de roupa foi adicionada.');
+      router.push('/outfit');
+
+    } catch (error: any) {
+      console.error('Erro ao adicionar peça:', error);
+      Alert.alert('Erro', error.message || 'Não foi possível adicionar a peça.');
+    } finally {
+      setLoading(false);
     }
   };
-
-  if (permission?.granted === false) return <Text>Sem acesso à câmera</Text>;
 
   return (
-    <View style={styles.container}>
-      <CameraView
-        style={styles.camera}
-        ref={cameraRef}
-        facing={type}
-        responsiveOrientationWhenOrientationLocked
-      >
-        <View style={styles.shutterContainer}>
-          {uri ? (
-            <View style={styles.previewContainer}>
-              <Image source={{ uri }} style={styles.previewImage} />
-              <View style={styles.previewButtons}>
-                <Button mode="outlined" onPress={() => setUri(null)}>Tirar outra</Button>
-                <Button mode="contained" onPress={handleUsePicture}>Usar foto</Button>
-              </View>
-            </View>
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      style={styles.container}
+      keyboardVerticalOffset={80} // Ajuste fino opcional
+    >
+      <ScrollView
+        contentContainerStyle={styles.scrollContainer}
+        keyboardShouldPersistTaps="handled" // Melhora a experiência de clicar em botões com o teclado aberto
+      >        
+        <View style={styles.imagePicker}>
+          {imageUri ? (
+            <Image source={{ uri: imageUri }} style={styles.image} />
           ) : (
-            <>
-              <Pressable onPress={handleTakePicture} style={styles.shutterBtn}>
-                <View style={styles.shutterBtnInner} />
-              </Pressable>
-              <Pressable onPress={toggleFacing} style={styles.flipButton}>
-                <Ionicons name="camera-reverse" size={32} color="white" />
-              </Pressable>
-            </>
+            <Avatar.Icon size={80} icon="image-outline" style={{ backgroundColor: 'transparent' }} color="#888" />
           )}
         </View>
-      </CameraView>
-    </View>
+        
+        <View style={styles.buttonActionsContainer}>
+          <Button icon="image-multiple" mode="outlined" onPress={handlePickFromGallery}>
+            Galeria
+          </Button>
+          <Button icon="camera" mode="outlined" onPress={handleTakePhoto}>
+            Câmera
+          </Button>
+        </View>
+
+        <TextInput label="Nome da Peça" value={name} onChangeText={setName} style={styles.input} />
+        <TextInput label="Marca" value={brand} onChangeText={setBrand} style={styles.input} />
+        <TextInput label="Descrição" value={description} onChangeText={setDescription} multiline style={styles.input} />
+        
+        <Text style={styles.categoryLabel}>Categoria</Text>
+        <SegmentedButtons
+          value={category}
+          onValueChange={(value) => setCategory(value as any)}
+          buttons={[
+            { value: 'top', label: 'Top' },
+            { value: 'bottom', label: 'Bottom' },
+            { value: 'shoes', label: 'Sapatos' },
+            { value: 'accessories', label: 'Acessórios' },
+          ]}
+          style={styles.input}
+        />
+
+        <Button
+          mode="contained"
+          onPress={handleAddPiece}
+          disabled={loading}
+          style={styles.button}
+        >
+          {loading ? <ActivityIndicator animating={true} color="white" /> : 'Salvar Peça'}
+        </Button>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  camera: { flex: 1 },
-  shutterContainer: {
-    position: 'absolute',
-    bottom: 44,
-    width: '100%',
+  container: {
+    flex: 1, // O KeyboardAvoidingView precisa ocupar toda a tela
+    backgroundColor: '#fff',
+  },
+  scrollContainer: {
+    padding: 20, // O padding agora vai no conteúdo do ScrollView
+    paddingBottom: 50, // Espaço extra no final para melhor rolagem
+  },
+  header: { textAlign: 'center', marginBottom: 20 },
+  imagePicker: { height: 150, width: 150, borderRadius: 10, backgroundColor: '#f0f0f0', justifyContent: 'center', alignItems: 'center', alignSelf: 'center', borderWidth: 1, borderColor: '#ccc', overflow: 'hidden' },
+  image: { height: '100%', width: '100%' },
+  buttonActionsContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 30,
+    justifyContent: 'space-evenly',
+    marginVertical: 20,
   },
-  shutterBtn: {
-    backgroundColor: 'transparent',
-    borderWidth: 5,
-    borderColor: 'white',
-    width: 85,
-    height: 85,
-    borderRadius: 45,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  shutterBtnInner: {
-    width: 70,
-    height: 70,
-    borderRadius: 50,
-    backgroundColor: 'white',
-  },
-  flipButton: {
-    width: 32,
-  },
-  previewContainer: {
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    padding: 20,
-    borderRadius: 12,
-  },
-  previewImage: {
-    width: 300,
-    height: 300,
-    borderRadius: 8,
-    marginBottom: 16,
-  },
-  previewButtons: {
-    flexDirection: 'row',
-    gap: 12,
-  },
+  input: { marginBottom: 16 },
+  categoryLabel: { marginBottom: 8, color: '#666' },
+  button: { marginTop: 10, paddingVertical: 5 },
 });
